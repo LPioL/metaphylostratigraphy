@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jan 24 15:43:25 2025
+Created on Mon Jan 27 14:44:07 2025
 
 @author: llopez06
 """
-
 
 
 import numpy as np
@@ -21,13 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-import stringdb
 
-from collections import defaultdict
-import csv
-from gprofiler import GProfiler
-import dataframe_image as dfi
-import re
 import os, datetime 
 import h5py
 #import pyhgnc
@@ -38,22 +31,20 @@ from scipy.stats import ttest_ind, entropy, ks_2samp, chisquare
 from scipy.stats import hypergeom
 
 
+
 # Define the path for the results directory
-results_dir = 'Results_age_age_gladyshev' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
+results_dir = 'Results_age_cellAge_senescence_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
 
 # Ensure the directory exists
 if not os.path.exists(results_dir):
     os.makedirs(results_dir)
 
 
-
-
-
 ##############################################
 # Functions
 ##############################################
 
-def plot_normalized_distributions_with_stats(test_data, age_human, output_path, name, color, lower_offset=-0.02):
+def plot_normalized_distributions_with_stats(test_data, age_human, output_path, name,color, lower_offset=-0.02):
     """
     Perform an over-representation test for all evolutionary categories
     and plot the comparison of distributions with stars for significant categories.
@@ -188,8 +179,6 @@ def plot_normalized_distributions_with_stats(test_data, age_human, output_path, 
 
     return results_df
 
-
-
 def plot_combined_gene_histogram(upregulated, downregulated, age_human_genes, evolutionary_order, output_path, y_max=None):
     """
     Plots a histogram with stacked bars for upregulated and downregulated genes,
@@ -259,6 +248,7 @@ def plot_combined_gene_histogram(upregulated, downregulated, age_human_genes, ev
     plt.savefig(output_path, dpi=300)
     plt.show()
 
+    
 
 condition_dfs = []  # At start of section
 ##############################################
@@ -337,92 +327,47 @@ plt.tight_layout()
 plt.savefig(f'./{results_dir}/combined_genes_evolutionary_ages_histogram.png', dpi=300)
 plt.show()
 
-##############################################
-# Age gladyshev database  https://age-meta.com/
-##############################################
 
-# Load the dataset from the uploaded file
-file_path = './database_age_human_genes/aging_diffexpr_data.csv'
-df = pd.read_csv(file_path, sep='\t')
 
-# Ensure the dataset has the necessary columns
-required_columns = ['entrez', 'genesymbol', 'Brain_pval', 'Human_pval', 'Muscle_pval', 'Liver_pval', 'All_pval']
-for col in required_columns:
-    if col not in df.columns:
-        raise ValueError(f"The column '{col}' is missing from the dataset")
 
-# Filter for human-specific genes with p-value < 0.05 across tissues
-def filter_genes_by_pval(df, pval_column):
-    return df[df[pval_column] < 0.05]
+######################################################
+# Load your dataset signature senescence cellAge
+######################################################
 
-conditions = {
-    'brain_genes': filter_genes_by_pval(df, 'Brain_adj_pval'),
-    'human_genes': filter_genes_by_pval(df, 'Human_adj_pval'),
-    'muscle_genes': filter_genes_by_pval(df, 'Muscle_adj_pval'),
-    'liver_genes': filter_genes_by_pval(df, 'Liver_adj_pval'),
-    'all_genes': filter_genes_by_pval(df, 'All_adj_pval'),
-}
 
-# Save each condition to a separate CSV file
-for condition_name, condition_data in conditions.items():
-    condition_output_path = os.path.join(results_dir, f'{condition_name}.csv')
-    condition_data.to_csv(condition_output_path, index=False)
-    print(f"Condition '{condition_name}' saved to {condition_output_path}")
+dataset_path = './Database_age_human_genes/signatures1.csv'
+df = pd.read_csv(dataset_path, sep=';')  # Adjust the delimiter if needed
 
-# Combine all genes into one DataFrame and drop duplicates
-all_filtered_genes = pd.concat(conditions.values()).drop_duplicates()
 
-# Save the combined results to a CSV file
-combined_output_path = os.path.join(results_dir, 'combined_filtered_human_genes.csv')
-all_filtered_genes.to_csv(combined_output_path, index=False)
-print(f"Combined filtered genes saved to {combined_output_path}")
+# Extract upregulated and downregulated genes
+upregulated_genes = df[df['ovevrexp'] > 0]
+downregulated_genes = df[df['underexp'] > 0]
 
-# Display the first few rows of the result
-print(all_filtered_genes.head())
 
-# Reload human_genes for further processing
-human_genes = conditions['human_genes']
 
-# load mapping
-mapping_mouse_human = pd.read_csv('././database_age_human_genes/hcop-1737733278553_649genes_sig.txt', delimiter = '\t' )
-mapping_mouse_human = mapping_mouse_human[['Primary symbol', 'Ortholog symbol']]
-dict_mapping_mouse_human = {k: list(v) for k,v in mapping_mouse_human.groupby('Primary symbol')['Ortholog symbol']}
-dict_mapping_mouse_human =  {k: v[0] for k,v in dict_mapping_mouse_human.items()}
-# Translate mouse gene symbols to human gene symbols in human_genes
-human_genes['genesymbol'] = human_genes['genesymbol'].apply(lambda x: dict_mapping_mouse_human.get(x, x))
+# Save the results to CSV files
+upregulated_genes.to_csv(results_dir+'/'+"upregulated_genes.csv", index=False)
+downregulated_genes.to_csv(results_dir+'/'+"downregulated_genes.csv", index=False)
 
-# Display the updated human_genes DataFrame
-print(human_genes.head())
-# Filter genes based on Human_logFC values
-human_genes_up = human_genes[human_genes['Human_logFC'] > 0]
-human_genes_down = human_genes[human_genes['Human_logFC'] < 0]
+# Print summary
+print(f"Upregulated genes count: {len(upregulated_genes)}")
+print(f"Downregulated genes count: {len(downregulated_genes)}")
 
-# Save the filtered results to separate CSV files
-human_genes_up_path = os.path.join(results_dir, 'human_genes_up.csv')
-human_genes_down_path = os.path.join(results_dir, 'human_genes_down.csv')
+# Extract upregulated and downregulated genes
+upregulated_genes = upregulated_genes['gene_symbol']
+downregulated_genes = downregulated_genes['gene_symbol']
 
-human_genes_up.to_csv(human_genes_up_path, index=False)
-human_genes_down.to_csv(human_genes_down_path, index=False)
 
-# Display summary of the filtering
-print(f"Number of upregulated genes: {len(human_genes_up)}")
-print(f"Number of downregulated genes: {len(human_genes_down)}")
-print(f"Upregulated genes saved to: {human_genes_up_path}")
-print(f"Downregulated genes saved to: {human_genes_down_path}")
-
-human_genes = list(human_genes['genesymbol'])
-human_genes_up  = list(human_genes_up['genesymbol'])
-human_genes_down  = list(human_genes_down['genesymbol'])
-
-conditions_analysis = [human_genes, human_genes_up, human_genes_down]
-name_conditions = ['human_genes', 'human_genes_up', 'human_genes_down']
+all_DEGS = pd.concat([upregulated_genes, downregulated_genes])
+conditions = [all_DEGS, upregulated_genes, downregulated_genes]
+name_conditions = ['all_DEGS_cellAge_senescence','upregulated_genes_cellAge_senescence', 'downregulated_genes_cellAge_senescence']
 colors = ['#2196F3', 'red','green']
 
 
 # Initialize an empty DataFrame for combined results
 combined_percentage_df = pd.DataFrame()
 
-for i, condition in enumerate(conditions_analysis):
+for i, condition in enumerate(conditions):
     # Filter the DataFrame based on the gene list
     filtered_df = age_human_genes[age_human_genes[0].isin(condition)]
     
@@ -468,7 +413,7 @@ for i, condition in enumerate(conditions_analysis):
     plt.show()
 
 
-    plot_normalized_distributions_with_stats(percentage_df, age_human_genes_df, f'./{results_dir}/genes_evolutionary_ages_histogram_stats_{name_conditions[i]}.png', name_conditions[i], colors[i], lower_offset=-0.5)
+    plot_normalized_distributions_with_stats(percentage_df, age_human_genes_df, f'./{results_dir}/genes_evolutionary_ages_histogram_stats_{name_conditions[i]}.png', name_conditions[i],colors[i], lower_offset=-0.5)
     
 # Plotting the combined histogram
 plt.figure(figsize=(14, 10))
@@ -482,10 +427,6 @@ plt.tight_layout()
 plt.savefig(f'./{results_dir}/combined_genes_evolutionary_ages_histogram.png', dpi=300)
 plt.show()
 
-plot_combined_gene_histogram(human_genes_up, human_genes_down,age_human_genes, evolutionary_order,  f'./{results_dir}/genes_evolutionary_ages_histogram_stats_combined_gladyshevcellMeta.png', y_max=900)
+plt.show()
 
-
-
-
-
-
+plot_combined_gene_histogram(upregulated_genes, downregulated_genes,age_human_genes, evolutionary_order,  f'./{results_dir}/genes_evolutionary_ages_histogram_stats_combined_senescentcellAge.png')
